@@ -93,15 +93,24 @@ warmup script and full hardware procedure live in the sibling stack repo,
 ./scripts/arm-warmup.sh        # expect 5/5 motors
 # 2. let the container reach your X server
 xhost +local:
-# 3. bring up the real-arm stack + rviz + gateway
-docker compose -f ros-docker/compose.hardware-rviz.yaml up
+# 3. bring up the real-arm stack + rviz + gateway (host networking)
+docker compose -f ros-docker/compose.hardware-rviz-hostnet.yaml up
 # 4. another terminal:
 cd app && flutter run -d linux
 ```
 
-Connect to **`tcp/localhost:7447`**, tap **Sleep** then **Home** — the real arm
+Connect to **`tcp/127.0.0.1:7447`**, tap **Sleep** then **Home** — the real arm
 moves and rviz mirrors it. Park the arm folded (tap **Sleep**) before tearing
 down.
+
+> **Networking note.** The steps above use the **host-net** compose
+> (`compose.hardware-rviz-hostnet.yaml`), which is the most robust: `rmw_zenohd`
+> binds the host's `:7447` directly, so the app connects with no docker-bridge in
+> the path. A bridge variant with a published port
+> (`compose.hardware-rviz.yaml`, connect `tcp/localhost:7447`) also exists, but on
+> some host networks the host cannot forward into docker bridge networks and the
+> app's connection will fail — prefer the `-hostnet` variant there (it mirrors the
+> sim compose's host-net default).
 
 ## The JSON-over-Zenoh contract
 

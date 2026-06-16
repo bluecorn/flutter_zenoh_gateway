@@ -1,0 +1,55 @@
+# Real-arm hardware control + rviz for px100_zenoh_gateway — HOST-NETWORK variant.
+#
+# Identical to compose.hardware-rviz.yaml EXCEPT it runs on `network_mode: host`
+# instead of publishing `ports: ["7447:7447"]` through the docker bridge. Use this
+# on any host network where host->docker-bridge forwarding is blocked (a per-network
+# firewall-zone/subnet condition): rmw_zenohd binds the host's [::]:7447 directly
+# (dual-stack — both tcp/localhost:7447 and tcp/127.0.0.1:7447 work), with no
+# bridge/proxy/publish involved. Device pass-through (/dev/ttyDXL, /dev/dri) and the
+# X11/rviz wiring are unaffected by host networking.
+#
+# Prerequisites are identical to compose.hardware-rviz.yaml (12V PSU; U2D2 ->
+# /dev/ttyDXL; the cold-start warmup from the sibling stack repo; a graphical
+# session + `xhost +local:`).
+#
+# Usage:
+#   xhost +local:
+#   docker compose -f ros-docker/compose.hardware-rviz-hostnet.yaml up
+#   # another terminal: cd app && flutter run -d linux  (connect tcp/127.0.0.1:7447)
+#   docker compose -f ros-docker/compose.hardware-rviz-hostnet.yaml down
+
+name: px100-hw-rviz-hostnet
+
+services:
+  hw:
+    image: ${PX100_IMAGE:-px100-robot:dev}
+    container_name: px100-hw-rviz-hostnet
+    init: true
+    # host networking: rmw_zenohd binds the host's :7447 directly — no bridge, no
+    # docker-proxy, no published port. Sidesteps the host->bridge forwarding block.
+    network_mode: host
+    environment:
+      DISPLAY: ${DISPLAY:-:0}      # rviz draws to the host X server
+      QT_QPA_PLATFORM: xcb
+    devices:
+      - /dev/ttyDXL:/dev/ttyDXL    # the U2D2 USB-serial adapter to the arm
+      - /dev/dri:/dev/dri          # host GPU render node for rviz (virgl/3D accel)
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw   # X11 socket for rviz
+      - ../ros-cpp:/work                   # our gateway, built into /work/install
+    working_dir: /work
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        source /opt/ros/lyrical/setup.bash
+        source /root/interbotix_ws/install/setup.bash
+        source /work/install/setup.bash
+        echo ">> launching REAL px100 control + rviz (xs_sdk, use_sim:=false, use_rviz:=true)..."
+        ros2 launch interbotix_xsarm_control xsarm_control.launch.py \
+          robot_model:=px100 use_sim:=false use_rviz:=true &
+        sleep 20
+        echo ">> starting gateway (px100/cmd/pose -> JointGroupCommand)..."
+        ros2 run px100_zenoh_gateway gateway_node &
+        wait
