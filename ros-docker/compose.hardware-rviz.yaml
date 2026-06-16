@@ -1,0 +1,68 @@
+# Real-arm hardware control WITH the on-screen rviz mirror — the hardware
+# acceptance compose (compose.hardware.yaml) plus the X11/rviz wiring lifted
+# from the sim compose (compose.sim-rviz.yaml). Runs the REAL Interbotix
+# control path (xs_sdk, use_sim:=false) against the physical PincherX-100 via
+# the U2D2 (/dev/ttyDXL), brings up rviz showing the arm's LIVE joint states,
+# and runs our gateway. The Flutter app connects to tcp/localhost:7447 and its
+# Home/Sleep buttons move the REAL arm while rviz mirrors it on screen.
+#
+# Unlike the sim compose there is NO apt-install on start: hardware mode uses
+# the C++ xs_sdk + C++ robot_state_publisher, so urdf_parser_py (xs_sdk_sim's
+# Python dep) is NOT needed. rviz renders the px100 meshes/config the
+# px100-robot image already ships, driven by the real arm's /joint_states.
+#
+# PREREQUISITES (same as compose.hardware.yaml — full procedure:
+# ros-docker/HARDWARE-ACCEPTANCE.md), plus a graphical host session for rviz:
+#   - EU 12V 3A PSU on the arm (5.5x2.5mm center-positive; motor LEDs solid).
+#   - U2D2 plugged into the host -> /dev/ttyDXL via the installed udev rule.
+#   - COLD-START WARMUP first: (cd ../pincherx-100-docker-lyrical && \
+#       ./scripts/arm-warmup.sh)  -> expect exit 0.
+#   - A running X server + `xhost +local:` so the container can reach it.
+#
+# USAGE
+#   # 1. warm the U2D2 bus (handles the cold-start quirk)
+#   (cd ../pincherx-100-docker-lyrical && ./scripts/arm-warmup.sh)
+#   # 2. let the container reach your X server
+#   xhost +local:
+#   # 3. bring up the real-arm stack + rviz + gateway (rviz opens with the arm)
+#   docker compose -f ros-docker/compose.hardware-rviz.yaml up
+#   # 4. another terminal: cd app && flutter run -d linux
+#   #    Connect (tcp/localhost:7447) -> tap Sleep, then Home -> the REAL arm
+#   #    moves and rviz mirrors it.
+#   # 5. park folded (tap Sleep), then tear down:
+#   docker compose -f ros-docker/compose.hardware-rviz.yaml down
+
+name: px100-hw-rviz
+
+services:
+  hw:
+    image: ${PX100_IMAGE:-px100-robot:dev}
+    container_name: px100-hw-rviz
+    init: true
+    ports:
+      - "7447:7447"               # rmw_zenohd router (image entrypoint) — the app connects here
+    environment:
+      DISPLAY: ${DISPLAY:-:0}      # rviz draws to the host X server
+      QT_QPA_PLATFORM: xcb
+    devices:
+      - /dev/ttyDXL:/dev/ttyDXL    # the U2D2 USB-serial adapter to the arm (host udev creates this on plug-in)
+      - /dev/dri:/dev/dri          # host GPU render node for rviz (virgl/3D accel)
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw   # X11 socket for rviz
+      - ../ros-cpp:/work                   # our gateway, built into /work/install
+    working_dir: /work
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        source /opt/ros/lyrical/setup.bash
+        source /root/interbotix_ws/install/setup.bash
+        source /work/install/setup.bash
+        echo ">> launching REAL px100 control + rviz (xs_sdk, use_sim:=false, use_rviz:=true)..."
+        ros2 launch interbotix_xsarm_control xsarm_control.launch.py \
+          robot_model:=px100 use_sim:=false use_rviz:=true &
+        sleep 20
+        echo ">> starting gateway (px100/cmd/pose -> JointGroupCommand)..."
+        ros2 run px100_zenoh_gateway gateway_node &
+        wait

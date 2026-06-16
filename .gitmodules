@@ -1,0 +1,3 @@
+[submodule "zenoh_dart"]
+	path = zenoh_dart
+	url = https://github.com/bluecorn/zenoh_dart.git

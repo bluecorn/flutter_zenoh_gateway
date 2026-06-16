@@ -1,0 +1,24 @@
+name: zenoh_ros_poc
+description: "A new Flutter project."
+publish_to: 'none'
+version: 0.4.0
+
+environment:
+  sdk: ^3.12.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^3.3.1
+  go_router: ^17.2.3
+  shared_preferences: ^2.5.5
+  zenoh:
+    path: ../zenoh_dart/package
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  very_good_analysis: ^10.2.0
+
+flutter:
+  uses-material-design: true

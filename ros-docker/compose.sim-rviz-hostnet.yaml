@@ -1,0 +1,54 @@
+# Single-container sim + rviz visual for px100_zenoh_gateway — HOST-NETWORK variant.
+#
+# Identical to compose.sim-rviz.yaml EXCEPT it runs on `network_mode: host`
+# instead of publishing `ports: ["7447:7447"]` through the docker bridge. Use this
+# on any host network where host->docker-bridge forwarding is blocked (a per-network
+# firewall-zone/subnet condition — see memory `docker-bridge-per-network`):
+# rmw_zenohd binds the host's [::]:7447 directly (dual-stack — both
+# tcp/localhost:7447 and tcp/127.0.0.1:7447 work), with no bridge/proxy/publish
+# involved. X11/rviz wiring is unaffected by host networking.
+#
+# Usage (host needs a graphical session):
+#   xhost +local:
+#   docker compose -f ros-docker/compose.sim-rviz-hostnet.yaml up
+#   # Flutter desktop app connects to tcp/127.0.0.1:7447 (or tcp/localhost:7447).
+#   docker compose -f ros-docker/compose.sim-rviz-hostnet.yaml down
+
+name: px100-sim-rviz-hostnet
+
+services:
+  sim:
+    image: ${PX100_IMAGE:-px100-robot:dev}
+    container_name: px100-sim-rviz-hostnet
+    init: true
+    # host networking: rmw_zenohd binds the host's :7447 directly — no bridge,
+    # no docker-proxy, no published port. Sidesteps the per-network host->bridge
+    # forwarding block and the localhost->::1 resolution gotcha in one move.
+    network_mode: host
+    environment:
+      DISPLAY: ${DISPLAY:-:0}
+      QT_QPA_PLATFORM: xcb
+    devices:
+      - /dev/dri:/dev/dri
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ../ros-cpp:/work
+    working_dir: /work
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        echo ">> ensuring urdf_parser_py (xs_sdk_sim dep; rviz2 already present)..."
+        apt-get update -qq
+        apt-get install -y -qq ros-lyrical-urdfdom-py
+        source /opt/ros/lyrical/setup.bash
+        source /root/interbotix_ws/install/setup.bash
+        source /work/install/setup.bash
+        echo ">> launching sim + rviz..."
+        ros2 launch interbotix_xsarm_control xsarm_control.launch.py \
+          robot_model:=px100 use_sim:=true use_rviz:=true &
+        sleep 20
+        echo ">> starting gateway..."
+        ros2 run px100_zenoh_gateway gateway_node &
+        wait

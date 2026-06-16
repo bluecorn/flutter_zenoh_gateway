@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>px100_zenoh_gateway</name>
+  <version>0.2.0</version>
+  <description>Zenoh-JSON to ROS 2 gateway for the PincherX-100 (walking skeleton).</description>
+  <maintainer email="hugo@example.com">hugo</maintainer>
+  <license>TODO</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>interbotix_xs_msgs</depend>
+  <depend>zenoh_cpp_vendor</depend>
+
+  <test_depend>ament_cmake_gtest</test_depend>
+  <test_depend>ament_cmake_ros</test_depend>
+  <test_depend>launch</test_depend>
+  <test_depend>launch_ros</test_depend>
+  <test_depend>launch_testing</test_depend>
+  <test_depend>launch_testing_ament_cmake</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
